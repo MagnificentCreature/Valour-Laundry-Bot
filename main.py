@@ -42,6 +42,7 @@ async def new_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
         chat_id=update.effective_chat.id,
         message_thread_id=THREAD_ID,
         text=prepare_message(),
+        parse_mode="MarkdownV2",
     )
 
 
@@ -53,17 +54,19 @@ async def edit_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
         chat_id=update.effective_chat.id,
         message_id=last_message.message_id,
         text=prepare_message(),
+        parse_mode="MarkdownV2",
     )
 
 
-async def send_image_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Sends the status image to the chat."""
-    photo = create_status_image(machines)
-    await context.bot.send_photo(
-        chat_id=update.effective_chat.id,
-        photo=photo,
-        message_thread_id=THREAD_ID,
-    )
+# async def send_image_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
+#     """Sends the status image to the chat."""
+#     photo = create_status_image(machines)
+#     await context.bot.send_photo(
+#         chat_id=update.effective_chat.id,
+#         caption=prepare_message(),
+#         photo=photo,
+#         message_thread_id=THREAD_ID,
+#     )
 
 
 async def set_availability(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -99,7 +102,13 @@ def prepare_message():
     """Prepare the status message"""
     washers = [str(machine) for machine in machines["washer"]]
     dryers = [str(machine) for machine in machines["dryer"]]
-    return "\n".join(washers) + "\n" + "\n".join(dryers)
+    zipped = list(zip(washers, dryers))
+    return (
+        "`"
+        + "\n"
+        + "\n".join([f"{washer:10} {dryer:10}" for washer, dryer in zipped])
+        + "`"
+    )
 
 
 if __name__ == "__main__":
@@ -111,12 +120,12 @@ if __name__ == "__main__":
     show_status_handler = CommandHandler("status", new_status)
     edit_message_handler = CommandHandler("edit", edit_status)
     set_availability_handler = CommandHandler("set", set_availability)
-    image_status_handler = CommandHandler("image", send_image_status)
+    # image_status_handler = CommandHandler("image", send_image_status)
 
     application.add_handler(show_status_handler)
     application.add_handler(edit_message_handler)
     application.add_handler(set_availability_handler)
-    application.add_handler(image_status_handler)
+    # application.add_handler(image_status_handler)
 
     print("Bot is running...")
     application.run_polling()

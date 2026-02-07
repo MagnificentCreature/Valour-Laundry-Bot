@@ -10,16 +10,17 @@ class Machine:
 class Washer(Machine):
     def __str__(self):
         if self.time_left == 0:
-            return f"Washer {self.index:02}: 🟩"
+            return f"W{self.index:2}:🟩"
         elif self.time_left <= 10:
-            return f"Washer {self.index:02}: 🟧 ({self.time_left} min remaining)"
-        return f"Washer {self.index:02}: 🟥 ({self.time_left} min remaining)"
+            print(len(f"W{self.index:2}:🟧 {self.time_left}m"))
+            return f"W{self.index:2}:🟧 {self.time_left}m"
+        return f"W{self.index:2}:🟥 {self.time_left}m"
 
 
 class Dryer(Machine):
     def __str__(self):
         if self.time_left == 0:
-            return f"Dryer {self.index:02}: 🟩"
+            return f"D{self.index:2}:🟩"
         elif self.time_left <= 10:
-            return f"Dryer {self.index:02}: 🟧 ({self.time_left} min remaining)"
-        return f"Dryer {self.index:02}: 🟥 ({self.time_left} min remaining)"
+            return f"D{self.index:2}:🟧 {self.time_left}m"
+        return f"D{self.index:2}:🟥 {self.time_left}m"
