@@ -6,18 +6,18 @@ from PIL import Image, ImageDraw, ImageFont
 try:
     # Try Segoe UI (Windows standard) for a more pleasing look, fallback to Arial
     try:
-        FONT = ImageFont.truetype("segoeuib.ttf", 26)
+        FONT = ImageFont.truetype("segoeuib.ttf", 22)
         HEADER_FONT = ImageFont.truetype("segoeuib.ttf", 30)
     except IOError:
-        FONT = ImageFont.truetype("arialbd.ttf", 26)
+        FONT = ImageFont.truetype("arialbd.ttf", 22)
         HEADER_FONT = ImageFont.truetype("arialbd.ttf", 30)
 except IOError:
     FONT = ImageFont.load_default()
     HEADER_FONT = ImageFont.load_default()
 
 try:
-    WASHER_ICON = Image.open("images/washer.png").convert("RGBA").resize((55, 55))
-    DRYER_ICON = Image.open("images/dryer.png").convert("RGBA").resize((55, 55))
+    WASHER_ICON = Image.open("images/washer.png").convert("RGBA").resize((100, 100))
+    DRYER_ICON = Image.open("images/dryer.png").convert("RGBA").resize((100, 100))
 except IOError:
     WASHER_ICON = None
     DRYER_ICON = None
@@ -33,67 +33,62 @@ def create_status_image(machines):
     image = Image.new("RGB", (width, height), bg_color)
     draw = ImageDraw.Draw(image)
 
-    # Draw Washers Header
-    draw.text((50, 15), "Washers", fill=text_color, font=HEADER_FONT)
-
-    # Helper to draw a machine row
-    def draw_machine(x, y, machine, icon):
-        # Determine color based on status
-        if machine.time_left == 0:
-            color = (46, 204, 113)  # Green
-        elif machine.time_left <= 10:
-            color = (241, 196, 15)  # Orange
-        else:
-            color = (231, 76, 60)  # Red
-
-        # Draw Icon or Fallback
+    def draw_section(header_text, start_y, machine_list, icon):
+        # Draw Icon
         if icon:
-            image.paste(icon, (x, y), icon)
-            # Draw status dot
-            draw.ellipse(
-                [x + 35, y + 35, x + 59, y + 59], fill=color, outline=bg_color, width=3
-            )
-        else:
-            # Fallback: Draw a colored circle if icon is missing
-            draw.ellipse([x, y, x + 52, y + 52], fill=color, outline=text_color)
+            image.paste(icon, (50, start_y + 20), icon)
 
-        # Draw Machine Number Centered Below
+        # Draw Header Text below icon
         draw.text(
-            (x + 28, y + 62),
-            str(machine.index),
+            (100, start_y + 130),
+            header_text,
             fill=text_color,
-            font=FONT,
+            font=HEADER_FONT,
             anchor="mt",
         )
 
-        # Draw Time to the Right
-        if machine.time_left > 0:
+        # Grid settings
+        grid_x = 200
+        box_w, box_h = 100, 80
+        gap = 15
+
+        for i, machine in enumerate(machine_list):
+            row = i // 5
+            col = i % 5
+
+            x = grid_x + col * (box_w + gap)
+            y = start_y + row * (box_h + gap)
+
+            # Determine color and text
+            if machine.time_left == 0:
+                color = (46, 204, 113)  # Green
+                status = "Free"
+            elif machine.time_left <= 10:
+                color = (241, 196, 15)  # Orange
+                status = f"{machine.time_left}m"
+            else:
+                color = (231, 76, 60)  # Red
+                status = f"{machine.time_left}m"
+
+            # Draw rounded box
+            draw.rounded_rectangle([x, y, x + box_w, y + box_h], radius=10, fill=color)
+
+            # Draw Machine Number (Top Left)
             draw.text(
-                (x + 65, y + 26),
-                f"{machine.time_left}m",
-                fill=text_color,
-                font=FONT,
-                anchor="lm",
+                (x + 10, y + 5), str(machine.index), fill=(255, 255, 255), font=FONT
             )
 
-    # Draw Washers (Grid 2 rows x 5 cols)
-    for i, washer in enumerate(machines["washer"]):
-        row = i // 5
-        col = i % 5
-        x = 50 + col * 150
-        y = 70 + row * 90
-        draw_machine(x, y, washer, WASHER_ICON)
+            # Draw Status (Center)
+            draw.text(
+                (x + box_w / 2, y + box_h / 2 + 10),
+                status,
+                fill=(255, 255, 255),
+                font=FONT,
+                anchor="mm",
+            )
 
-    # Draw Dryers Header
-    draw.text((50, 255), "Dryers", fill=text_color, font=HEADER_FONT)
-
-    # Draw Dryers (Grid 2 rows x 5 cols)
-    for i, dryer in enumerate(machines["dryer"]):
-        row = i // 5
-        col = i % 5
-        x = 50 + col * 150
-        y = 310 + row * 90
-        draw_machine(x, y, dryer, DRYER_ICON)
+    draw_section("Washers", 40, machines["washer"], WASHER_ICON)
+    draw_section("Dryers", 260, machines["dryer"], DRYER_ICON)
 
     # Save to BytesIO object so we can send it without saving to disk
     bio = io.BytesIO()
