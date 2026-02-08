@@ -2,22 +2,10 @@ import logging
 import os
 
 from dotenv import load_dotenv
-from telegram import (
-    InlineKeyboardButton,
-    InlineKeyboardMarkup,
-    InputMediaPhoto,
-    ReplyKeyboardMarkup,
-    Update,
-)
-from telegram.ext import (
-    ApplicationBuilder,
-    CallbackQueryHandler,
-    CommandHandler,
-    ContextTypes,
-    MessageHandler,
-    filters,
-)
+from telegram import InputMediaPhoto, Update
+from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
 
+import mqtt_helper
 from image_generator import create_status_image
 from models import Dryer, Washer
 
@@ -107,11 +95,38 @@ def prepare_message():
     )
 
 
-if __name__ == "__main__":
-    load_dotenv()
-    TOKEN = os.getenv("BOT_TOKEN")
+def on_mqtt_message(client, userdata, msg):
+    """Handle incoming MQTT messages to update machine status."""
+    try:
+        # Expected topic format: valour/laundry/<type>/<index>
+        # Example: valour/laundry/washer/1
+        parts = msg.topic.split("/")
+        if len(parts) < 4:
+            return
 
-    application = ApplicationBuilder().token(TOKEN).build()
+        machine_type = parts[2]  # "washer" or "dryer"
+        index = int(parts[3]) - 1  # Convert 1-based index to 0-based
+        payload = msg.payload.decode("utf-8")
+
+        if machine_type in machines and 0 <= index < len(machines[machine_type]):
+            # Determine time left
+            if payload.upper() == "FINISHED":
+                minutes = 0
+            elif payload.isdigit():
+                minutes = int(payload)
+            else:
+                return  # Ignore invalid payloads
+
+            # Update the machine state
+            machines[machine_type][index].set_time(minutes)
+            logging.info(f"MQTT Update: {machine_type} {index+1} -> {minutes} min")
+
+    except Exception as e:
+        logging.error(f"MQTT Error processing message: {e}")
+
+
+def pybot_init(token):
+    application = ApplicationBuilder().token(token).build()
 
     show_status_handler = CommandHandler("status", new_status)
     edit_message_handler = CommandHandler("edit", edit_status)
@@ -121,5 +136,45 @@ if __name__ == "__main__":
     application.add_handler(edit_message_handler)
     application.add_handler(set_availability_handler)
 
-    print("Bot is running...")
     application.run_polling()
+
+
+def on_mqtt_message(client, userdata, msg):
+    """Handle incoming MQTT messages to update machine status."""
+    try:
+        # Expected topic format: laundry/<type>/<index>
+        # Example: laundry/washer/1
+        parts = msg.topic.split("/")
+        if len(parts) < 3:
+            return
+
+        machine_type = parts[1]  # "washer" or "dryer"
+        index = int(parts[2]) - 1  # Convert 1-based index to 0-based
+        payload = msg.payload.decode("utf-8")
+
+        if machine_type in machines and 0 <= index < len(machines[machine_type]):
+            # Determine time left
+            if payload.upper() == "F":  # F for finished
+                minutes = 0
+            elif payload.isdigit():
+                minutes = int(payload)
+            else:
+                return  # Ignore invalid payloads
+
+            # Update the machine state
+            machines[machine_type][index].set_time(minutes)
+            logging.info(f"MQTT Update: {machine_type} {index+1} -> {minutes} min")
+
+    except Exception as e:
+        logging.error(f"MQTT Error processing message: {e}")
+
+
+if __name__ == "__main__":
+    load_dotenv()
+    TOKEN = os.getenv("BOT_TOKEN")
+    BROKER_URL = os.getenv("MQTT_SERVER")
+    USERNAME = os.getenv("MQTT_USER")
+    PASSWORD = os.getenv("MQTT_PASS")
+
+    mqtt_helper.mqtt_init(BROKER_URL, USERNAME, PASSWORD, on_mqtt_message)
+    pybot_init(TOKEN)

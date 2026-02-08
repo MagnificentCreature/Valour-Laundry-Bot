@@ -4,8 +4,6 @@ import paho.mqtt.client as paho
 from dotenv import load_dotenv
 from paho import mqtt
 
-broker_url, username, password = None, None, None
-
 
 # setting callbacks for different events to see if it works, print the message etc.
 def on_connect(client, userdata, flags, rc, properties=None):
@@ -47,18 +45,22 @@ def on_message(client, userdata, msg):
     print(f"{msg.topic}: {msg.payload.decode()}")
 
 
-def paho_init():
-    if broker_url is None or username is None or password is None:
-        return None
+def paho_init(on_message_callback=None):
     client = paho.Client(client_id="", userdata=None, protocol=paho.MQTTv5)
     client.on_connect = on_connect
     client.on_subscribe = on_subscribe
-    client.on_message = on_message
+    if on_message_callback:
+        client.on_message = on_message_callback
+    else:
+        client.on_message = on_message
     return client
 
 
-def paho_connect(client):
+def paho_connect(client, username, password, broker_url):
     assert client is not None
+    assert username is not None
+    assert password is not None
+    assert broker_url is not None
 
     client.tls_set(tls_version=mqtt.client.ssl.PROTOCOL_TLS)
     client.username_pw_set(username, password)
@@ -66,16 +68,26 @@ def paho_connect(client):
     return client
 
 
-if __name__ == "__main__":
-    load_dotenv()
-    broker_url = os.getenv("MQTT_SERVER")
-    username = os.getenv("MQTT_USER")
-    password = os.getenv("MQTT_PASS")
-    print(broker_url, username, password)
+def mqtt_init(broker_url, username, password, on_message_callback=None):
+    client = paho_init(on_message_callback)
+    paho_connect(client, username, password, broker_url)
 
-    client = paho_init()
-    paho_connect(client)
+    client.subscribe("laundry/+/+")
 
-    client.subscribe("laundry/+")
+    client.loop_start()
 
-    client.loop_forever()
+
+# if __name__ == "__main__":
+#     load_dotenv()
+#     broker_url = os.getenv("MQTT_SERVER")
+#     username = os.getenv("MQTT_USER")
+#     password = os.getenv("MQTT_PASS")
+#     print(broker_url, username, password)
+
+#     client = paho_init()
+#     paho_connect(client)
+
+#     client.subscribe("laundry/+")
+
+#     client.loop_forever()
+#     client.loop_forever()
