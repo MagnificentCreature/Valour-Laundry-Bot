@@ -52,15 +52,6 @@ async def update_status_message(bot, chat_id, message_id):
     )
 
 
-# async def edit_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
-#     """Edit a message in the forum topic"""
-#     global last_message
-#     if last_message:
-#         await update_status_message(
-#             context.bot, update.effective_chat.id, last_message.message_id
-#         )
-
-
 async def set_availability(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Changes the value of my_value based on user input."""
     global machines
@@ -137,8 +128,8 @@ def on_mqtt_message(client, userdata, msg):
         if len(parts) < 3:
             return
 
-        machine_type = parts[2]  # "washer" or "dryer"
-        index = int(parts[3]) - 1  # Convert 1-based index to 0-based
+        machine_type = parts[1]  # "washer" or "dryer"
+        index = int(parts[2]) - 1  # Convert 1-based index to 0-based
         payload = msg.payload.decode("utf-8")
 
         if machine_type in machines and 0 <= index < len(machines[machine_type]):
@@ -155,10 +146,11 @@ def on_mqtt_message(client, userdata, msg):
             logging.info(f"MQTT Update: {machine_type} {index+1} -> {minutes} min")
 
             print("HERE")
-            if bot_loop and last_message:
-                print("HERE2")
-                asyncio.run_coroutine_threadsafe(update_message(), bot_loop)
-                print("HERE3")
+            if bot_loop:
+                if last_message:
+                    asyncio.run_coroutine_threadsafe(update_message(), bot_loop)
+                else:
+                    asyncio.run_coroutine_threadsafe(new_status(), bot_loop)
 
     except Exception as e:
         logging.error(f"MQTT Error processing message: {e}")
@@ -174,11 +166,9 @@ def pybot_init(token):
     application = ApplicationBuilder().token(token).post_init(post_init).build()
 
     show_status_handler = CommandHandler("status", new_status)
-    # edit_message_handler = CommandHandler("edit", edit_status)
     set_availability_handler = CommandHandler("set", set_availability)
 
     application.add_handler(show_status_handler)
-    # application.add_handler(edit_message_handler)
     application.add_handler(set_availability_handler)
 
     application.run_polling()
@@ -193,3 +183,13 @@ if __name__ == "__main__":
 
     mqtt_helper.mqtt_init(BROKER_URL, USERNAME, PASSWORD, on_mqtt_message)
     pybot_init(TOKEN)
+
+
+# Removed edit status command, it was used for debugging
+# async def edit_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
+#     """Edit a message in the forum topic"""
+#     global last_message
+#     if last_message:
+#         await update_status_message(
+#             context.bot, update.effective_chat.id, last_message.message_id
+#         )
