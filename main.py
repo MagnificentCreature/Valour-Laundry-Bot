@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import os
 
@@ -13,6 +14,8 @@ THREAD_ID = 2
 WASHER_COUNT = 10
 DRYER_COUNT = 10
 
+application = None
+bot_loop = None
 last_message = None
 machines = {
     "washer": [Washer(i) for i in range(WASHER_COUNT)],
@@ -38,19 +41,24 @@ async def new_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 
-async def edit_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Edit a message in the forum topic"""
-    global last_message
-
+async def update_status_message(bot, chat_id, message_id):
     photo = create_status_image(machines)
-
-    await context.bot.edit_message_media(
-        chat_id=update.effective_chat.id,
-        message_id=last_message.message_id,
+    await bot.edit_message_media(
+        chat_id=chat_id,
+        message_id=message_id,
         media=InputMediaPhoto(
             media=photo, caption=prepare_message(), parse_mode="MarkdownV2"
         ),
     )
+
+
+# async def edit_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
+#     """Edit a message in the forum topic"""
+#     global last_message
+#     if last_message:
+#         await update_status_message(
+#             context.bot, update.effective_chat.id, last_message.message_id
+#         )
 
 
 async def set_availability(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -95,61 +103,42 @@ def prepare_message():
     )
 
 
-def on_mqtt_message(client, userdata, msg):
-    """Handle incoming MQTT messages to update machine status."""
-    try:
-        # Expected topic format: valour/laundry/<type>/<index>
-        # Example: valour/laundry/washer/1
-        parts = msg.topic.split("/")
-        if len(parts) < 4:
-            return
-
-        machine_type = parts[2]  # "washer" or "dryer"
-        index = int(parts[3]) - 1  # Convert 1-based index to 0-based
-        payload = msg.payload.decode("utf-8")
-
-        if machine_type in machines and 0 <= index < len(machines[machine_type]):
-            # Determine time left
-            if payload.upper() == "FINISHED":
-                minutes = 0
-            elif payload.isdigit():
-                minutes = int(payload)
-            else:
-                return  # Ignore invalid payloads
-
-            # Update the machine state
-            machines[machine_type][index].set_time(minutes)
-            logging.info(f"MQTT Update: {machine_type} {index+1} -> {minutes} min")
-
-    except Exception as e:
-        logging.error(f"MQTT Error processing message: {e}")
+def update_processing(input, machine_type, machine_index):
+    machines[machine_type][machine_index].set_time(input)
 
 
-def pybot_init(token):
-    application = ApplicationBuilder().token(token).build()
-
-    show_status_handler = CommandHandler("status", new_status)
-    edit_message_handler = CommandHandler("edit", edit_status)
-    set_availability_handler = CommandHandler("set", set_availability)
-
-    application.add_handler(show_status_handler)
-    application.add_handler(edit_message_handler)
-    application.add_handler(set_availability_handler)
-
-    application.run_polling()
+async def update_message():
+    """Updates the Telegram message with the latest status."""
+    if last_message:
+        try:
+            await update_status_message(
+                application.bot, last_message.chat.id, last_message.message_id
+            )
+        except Exception as e:
+            logging.error(f"Error updating message: {e}")
+    else:
+        try:
+            photo = create_status_image(machines)
+            await application.bot.send_photo(
+                chat_id=last_message.chat.id,
+                caption=prepare_message(),
+                photo=photo,
+                message_thread_id=THREAD_ID,
+                parse_mode="MarkdownV2",
+            )
+        except Exception as e:
+            logging.error(f"Error sending message: {e}")
 
 
 def on_mqtt_message(client, userdata, msg):
     """Handle incoming MQTT messages to update machine status."""
     try:
-        # Expected topic format: laundry/<type>/<index>
-        # Example: laundry/washer/1
         parts = msg.topic.split("/")
         if len(parts) < 3:
             return
 
-        machine_type = parts[1]  # "washer" or "dryer"
-        index = int(parts[2]) - 1  # Convert 1-based index to 0-based
+        machine_type = parts[2]  # "washer" or "dryer"
+        index = int(parts[3]) - 1  # Convert 1-based index to 0-based
         payload = msg.payload.decode("utf-8")
 
         if machine_type in machines and 0 <= index < len(machines[machine_type]):
@@ -162,11 +151,37 @@ def on_mqtt_message(client, userdata, msg):
                 return  # Ignore invalid payloads
 
             # Update the machine state
-            machines[machine_type][index].set_time(minutes)
+            update_processing(minutes, machine_type, index)
             logging.info(f"MQTT Update: {machine_type} {index+1} -> {minutes} min")
+
+            print("HERE")
+            if bot_loop and last_message:
+                print("HERE2")
+                asyncio.run_coroutine_threadsafe(update_message(), bot_loop)
+                print("HERE3")
 
     except Exception as e:
         logging.error(f"MQTT Error processing message: {e}")
+
+
+async def post_init(app):
+    global bot_loop
+    bot_loop = asyncio.get_running_loop()
+
+
+def pybot_init(token):
+    global application
+    application = ApplicationBuilder().token(token).post_init(post_init).build()
+
+    show_status_handler = CommandHandler("status", new_status)
+    # edit_message_handler = CommandHandler("edit", edit_status)
+    set_availability_handler = CommandHandler("set", set_availability)
+
+    application.add_handler(show_status_handler)
+    # application.add_handler(edit_message_handler)
+    application.add_handler(set_availability_handler)
+
+    application.run_polling()
 
 
 if __name__ == "__main__":
