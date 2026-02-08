@@ -12,7 +12,6 @@ class Washer(Machine):
         if self.time_left == 0:
             return f"W{self.index:2}:🟩"
         elif self.time_left <= 10:
-            print(len(f"W{self.index:2}:🟧 {self.time_left}m"))
             return f"W{self.index:2}:🟧 {self.time_left}m"
         return f"W{self.index:2}:🟥 {self.time_left}m"
 

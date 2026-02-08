@@ -5,6 +5,7 @@ from dotenv import load_dotenv
 from telegram import (
     InlineKeyboardButton,
     InlineKeyboardMarkup,
+    InputMediaPhoto,
     ReplyKeyboardMarkup,
     Update,
 )
@@ -38,10 +39,13 @@ async def new_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Show the status of the washing machines"""
     global last_message
 
-    last_message = await context.bot.send_message(
+    photo = create_status_image(machines)
+
+    last_message = await context.bot.send_photo(
         chat_id=update.effective_chat.id,
+        caption=prepare_message(),
+        photo=photo,
         message_thread_id=THREAD_ID,
-        text=prepare_message(),
         parse_mode="MarkdownV2",
     )
 
@@ -50,23 +54,15 @@ async def edit_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Edit a message in the forum topic"""
     global last_message
 
-    await context.bot.edit_message_text(
+    photo = create_status_image(machines)
+
+    await context.bot.edit_message_media(
         chat_id=update.effective_chat.id,
         message_id=last_message.message_id,
-        text=prepare_message(),
-        parse_mode="MarkdownV2",
+        media=InputMediaPhoto(
+            media=photo, caption=prepare_message(), parse_mode="MarkdownV2"
+        ),
     )
-
-
-# async def send_image_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
-#     """Sends the status image to the chat."""
-#     photo = create_status_image(machines)
-#     await context.bot.send_photo(
-#         chat_id=update.effective_chat.id,
-#         caption=prepare_message(),
-#         photo=photo,
-#         message_thread_id=THREAD_ID,
-#     )
 
 
 async def set_availability(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -120,12 +116,10 @@ if __name__ == "__main__":
     show_status_handler = CommandHandler("status", new_status)
     edit_message_handler = CommandHandler("edit", edit_status)
     set_availability_handler = CommandHandler("set", set_availability)
-    # image_status_handler = CommandHandler("image", send_image_status)
 
     application.add_handler(show_status_handler)
     application.add_handler(edit_message_handler)
     application.add_handler(set_availability_handler)
-    # application.add_handler(image_status_handler)
 
     print("Bot is running...")
     application.run_polling()
