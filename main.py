@@ -26,6 +26,19 @@ logging.basicConfig(
 )
 
 
+def prepare_message():
+    """Prepare the status message"""
+    washers = [str(machine) for machine in machines["washer"]]
+    dryers = [str(machine) for machine in machines["dryer"]]
+    zipped = list(zip(washers, dryers))
+    return (
+        "`"
+        + "\n"
+        + "\n".join([f"{washer:10} {dryer:10}" for washer, dryer in zipped])
+        + "`"
+    )
+
+
 async def new_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Show the status of the washing machines"""
     global last_message
@@ -50,6 +63,17 @@ async def update_status_message(bot, chat_id, message_id):
             media=photo, caption=prepare_message(), parse_mode="MarkdownV2"
         ),
     )
+
+
+async def update_message():
+    """Updates the Telegram message with the latest status."""
+    if last_message:
+        try:
+            await update_status_message(
+                application.bot, last_message.chat.id, last_message.message_id
+            )
+        except Exception as e:
+            logging.error(f"Error updating message: {e}")
 
 
 async def set_availability(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -81,44 +105,8 @@ async def set_availability(update: Update, context: ContextTypes.DEFAULT_TYPE) -
         await update.message.reply_text("Usage: /set <washer/dryer> <index> <minutes>")
 
 
-def prepare_message():
-    """Prepare the status message"""
-    washers = [str(machine) for machine in machines["washer"]]
-    dryers = [str(machine) for machine in machines["dryer"]]
-    zipped = list(zip(washers, dryers))
-    return (
-        "`"
-        + "\n"
-        + "\n".join([f"{washer:10} {dryer:10}" for washer, dryer in zipped])
-        + "`"
-    )
-
-
 def update_processing(input, machine_type, machine_index):
     machines[machine_type][machine_index].set_time(input)
-
-
-async def update_message():
-    """Updates the Telegram message with the latest status."""
-    if last_message:
-        try:
-            await update_status_message(
-                application.bot, last_message.chat.id, last_message.message_id
-            )
-        except Exception as e:
-            logging.error(f"Error updating message: {e}")
-    else:
-        try:
-            photo = create_status_image(machines)
-            await application.bot.send_photo(
-                chat_id=last_message.chat.id,
-                caption=prepare_message(),
-                photo=photo,
-                message_thread_id=THREAD_ID,
-                parse_mode="MarkdownV2",
-            )
-        except Exception as e:
-            logging.error(f"Error sending message: {e}")
 
 
 def on_mqtt_message(client, userdata, msg):
