@@ -54,6 +54,19 @@ async def new_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 
+async def start_reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Show the status of the washing machines"""
+
+    photo = create_status_image(machines)
+
+    await context.bot.send_photo(
+        chat_id=update.effective_chat.id,
+        caption=prepare_message(),
+        photo=photo,
+        parse_mode="MarkdownV2",
+    )
+
+
 async def update_status_message(bot, chat_id, message_id):
     photo = create_status_image(machines)
     await bot.edit_message_media(
@@ -106,6 +119,8 @@ async def set_availability(update: Update, context: ContextTypes.DEFAULT_TYPE) -
 
 
 def update_processing(input, machine_type, machine_index):
+    if machines[machine_type][machine_index].get_time() > 0:
+        return
     machines[machine_type][machine_index].set_time(input)
 
 
@@ -144,9 +159,35 @@ def on_mqtt_message(client, userdata, msg):
         logging.error(f"MQTT Error processing message: {e}")
 
 
+async def countdown_timer():
+    """Background task to decrease machine time every minute."""
+    while True:
+        await asyncio.sleep(30)
+        # await asyncio.sleep(60)
+        has_changes = False
+        for machine_list in machines.values():
+            for machine in machine_list:
+                if machine.tick():
+                    has_changes = True
+
+        if has_changes:
+            await update_message()
+
+
 async def post_init(app):
     global bot_loop
     bot_loop = asyncio.get_running_loop()
+    app.create_task(countdown_timer())
+
+
+# Removed edit status command, it was used for debugging
+async def edit_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Edit a message in the forum topic"""
+    global last_message
+    if last_message:
+        await update_status_message(
+            context.bot, update.effective_chat.id, last_message.message_id
+        )
 
 
 def pybot_init(token):
@@ -155,9 +196,13 @@ def pybot_init(token):
 
     show_status_handler = CommandHandler("status", new_status)
     set_availability_handler = CommandHandler("set", set_availability)
+    edit_status_handler = CommandHandler("edit", edit_status)
+    start_handler = CommandHandler("start", start_reply)
 
     application.add_handler(show_status_handler)
     application.add_handler(set_availability_handler)
+    application.add_handler(edit_status_handler)
+    application.add_handler(start_handler)
 
     application.run_polling()
 
@@ -171,13 +216,3 @@ if __name__ == "__main__":
 
     mqtt_helper.mqtt_init(BROKER_URL, USERNAME, PASSWORD, on_mqtt_message)
     pybot_init(TOKEN)
-
-
-# Removed edit status command, it was used for debugging
-# async def edit_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
-#     """Edit a message in the forum topic"""
-#     global last_message
-#     if last_message:
-#         await update_status_message(
-#             context.bot, update.effective_chat.id, last_message.message_id
-#         )

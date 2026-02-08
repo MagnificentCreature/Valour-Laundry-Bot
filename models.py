@@ -3,8 +3,17 @@ class Machine:
         self.index = index + 1
         self.time_left = 0
 
+    def get_time(self):
+        return self.time_left
+
     def set_time(self, time_left):
         self.time_left = time_left
+
+    def tick(self):
+        if self.time_left > 0:
+            self.time_left -= 1
+            return True
+        return False
 
 
 class Washer(Machine):
